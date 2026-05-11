@@ -1,12 +1,12 @@
 email:
-  worker_url: https://your-worker.workers.dev
-  domain: your-domain.com
+  worker_url: https://xapi.chanlaoban2.ccwu.cc
+  domain: chanlaoban2.ccwu.cc
   prefix_length: 10
   wait_timeout: 120
   poll_interval: 3
-  admin_password: ''
+  admin_password: chanlaoban
 browser:
-  headless: true
+  headless: false
   slow_mo: 100
 region:
   current: usa

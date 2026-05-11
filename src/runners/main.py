@@ -886,7 +886,16 @@ def run(fixed_account=None):
                     step_tracker.report("fill_code", "error", str(e))
         else:
             print("❌ 未能获取到验证码")
-
+            step_tracker.report("wait_code", "error", "等待验证码超时或失败")
+            print("\n⚠️  注册流程终止：未能获取到验证码")
+            print("  可能原因：")
+            print("  - Cloudflare Email Routing 未配置或配置有误，域名收不到邮件")
+            print("  - 邮件被标记为垃圾邮件")
+            print("  - Worker 与邮箱路由之间的连接问题")
+            print("  - 等待超时（默认120秒，可在配置中调整）")
+            print("  请检查 Cloudflare 后台的 Email Routing 配置后重试。\n")
+            return
+        
         # 第六步：设置密码
         step_tracker.report("set_password", "running")
         print("正在准备设置密码...")

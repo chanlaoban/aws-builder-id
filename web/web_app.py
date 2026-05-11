@@ -609,9 +609,20 @@ async def start_registration():
         running_status["running"] = True
         running_status["started_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         env = os.environ.copy()
+        # 清除代理环境变量，避免影响 Worker API 调用和浏览器自动化
+        for key in ['http_proxy', 'https_proxy', 'HTTP_PROXY', 'HTTPS_PROXY', 'all_proxy', 'ALL_PROXY']:
+            env.pop(key, None)
+        # 使用 xvfb 虚拟显示运行浏览器（非无头模式，降低被检测概率）
+        env['DISPLAY'] = ':99'
+        try:
+            # 先确保 xvfb 在运行
+            subprocess.run(['Xvfb', ':99', '-screen', '0', '1920x1080x24'],
+                         capture_output=True, timeout=5)
+        except:
+            pass
         try:
             result = subprocess.run(
-                [sys.executable, str(BASE_DIR / "src" / "runners" / "main.py")],
+                ['xvfb-run', '-a', sys.executable, str(BASE_DIR / "src" / "runners" / "main.py")],
                 cwd=str(BASE_DIR),
                 capture_output=True,
                 text=True,
