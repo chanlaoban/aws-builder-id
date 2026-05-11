@@ -1,0 +1,1301 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AWS Builder ID 管理</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f1923; color: #e0e0e0; min-height: 100vh; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+
+        /* Header */
+        .header { background: linear-gradient(135deg, #1a2a3a 0%, #0d2137 100%); border: 1px solid #2a4055; border-radius: 12px; padding: 24px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; }
+        .header-left h1 { font-size: 24px; color: #ff9900; margin-bottom: 4px; }
+        .header-left p { color: #8899aa; font-size: 14px; }
+        .header-right { text-align: right; }
+        .badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+        .badge.online { background: #22c55e20; color: #22c55e; border: 1px solid #22c55e40; }
+        .badge.offline { background: #ef444420; color: #ef4444; border: 1px solid #ef444440; }
+        .badge.warning { background: #f59e0b20; color: #f59e0b; border: 1px solid #f59e0b40; }
+
+        /* Stats */
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }
+        .stat-card { background: #1a2a3a; border: 1px solid #2a4055; border-radius: 10px; padding: 16px; }
+        .stat-card .num { font-size: 28px; font-weight: 700; color: #ff9900; }
+        .stat-card .label { font-size: 12px; color: #667788; margin-top: 2px; }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 4px; margin-bottom: 20px; flex-wrap: wrap; }
+        .tab { padding: 10px 18px; border: 1px solid #2a4055; border-radius: 8px; cursor: pointer; background: transparent; color: #8899aa; font-size: 13px; transition: all 0.2s; font-family: inherit; }
+        .tab:hover { background: #1a2a3a; color: #e0e0e0; }
+        .tab.active { background: #ff990020; border-color: #ff990060; color: #ff9900; }
+        .tab .badge { margin-left: 6px; font-size: 10px; padding: 2px 8px; }
+
+        /* Panels */
+        .panel { display: none; }
+        .panel.active { display: block; }
+        .panel-title { font-size: 18px; font-weight: 600; margin-bottom: 16px; color: #e0e0e0; display: flex; align-items: center; gap: 8px; }
+
+        /* Config Form */
+        .config-section { background: #1a2a3a; border: 1px solid #2a4055; border-radius: 10px; margin-bottom: 16px; overflow: hidden; }
+        .config-section-header { padding: 14px 20px; background: #0d2137; border-bottom: 1px solid #2a4055; cursor: pointer; display: flex; align-items: center; justify-content: space-between; user-select: none; }
+        .config-section-header h3 { font-size: 15px; color: #ff9900; }
+        .config-section-header .section-desc { font-size: 12px; color: #667788; margin-top: 2px; }
+        .config-section-body { padding: 16px 20px; display: none; }
+        .config-section-body.open { display: block; }
+        .config-section-body.open + .config-section-header + .config-section-body { }
+        .arrow { transition: transform 0.2s; font-size: 12px; }
+        .arrow.open { transform: rotate(180deg); }
+
+        .form-group { margin-bottom: 16px; }
+        .form-group:last-child { margin-bottom: 0; }
+        .form-label { display: block; font-size: 13px; font-weight: 500; color: #c0d0e0; margin-bottom: 4px; }
+        .form-label .required { color: #ef4444; margin-left: 2px; }
+        .form-desc { font-size: 11px; color: #667788; margin-bottom: 6px; line-height: 1.4; }
+        .form-desc .howto { color: #60a5fa; cursor: pointer; text-decoration: underline; text-decoration-style: dotted; }
+        .form-desc .howto:hover { color: #93c5fd; }
+
+        .form-control { width: 100%; padding: 10px 14px; background: #0d2137; color: #e0e0e0; border: 1px solid #2a4055; border-radius: 8px; font-size: 14px; font-family: inherit; transition: border-color 0.2s; }
+        .form-control:focus { outline: none; border-color: #ff9900; }
+        .form-control.error { border-color: #ef4444; }
+        .form-control::placeholder { color: #4a5a6a; }
+
+        select.form-control { cursor: pointer; }
+        select.form-control option { background: #0d2137; }
+
+        .checkbox-group { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; }
+        .checkbox-group input[type="checkbox"] { width: 18px; height: 18px; margin-top: 1px; accent-color: #ff9900; cursor: pointer; flex-shrink: 0; }
+        .checkbox-group .checkbox-label { font-size: 14px; color: #e0e0e0; cursor: pointer; }
+
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        @media (max-width: 600px) { .form-row { grid-template-columns: 1fr; } }
+
+        .form-actions { display: flex; gap: 12px; margin-top: 16px; padding-top: 16px; border-top: 1px solid #2a4055; }
+        .form-actions .btn { padding: 10px 24px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; font-family: inherit; }
+        .form-actions .btn-primary { background: #ff9900; color: #0f1923; }
+        .form-actions .btn-primary:hover { background: #ffaa22; }
+        .form-actions .btn-primary:disabled { background: #2a4055; color: #667788; cursor: not-allowed; }
+        .form-actions .btn-secondary { background: #2a4055; color: #e0e0e0; }
+        .form-actions .btn-secondary:hover { background: #3a5065; }
+
+        /* Validation messages */
+        .validation-errors { background: #ef444420; border: 1px solid #ef444440; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: none; }
+        .validation-errors.show { display: block; }
+        .validation-errors .error-item { color: #ef4444; font-size: 13px; padding: 2px 0; }
+        .field-error { color: #ef4444; font-size: 11px; margin-top: 2px; display: none; }
+        .field-error.show { display: block; }
+
+        /* Success message */
+        .save-success { background: #22c55e20; border: 1px solid #22c55e40; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: none; color: #22c55e; }
+        .save-success.show { display: block; }
+
+        /* Env Check */
+        .env-check-btn-wrap { text-align: center; padding: 40px; }
+        .env-btn { padding: 16px 40px; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.3s; border: 2px solid #2a4055; background: linear-gradient(135deg, #1a2a3a, #0d2137); color: #e0e0e0; font-family: inherit; }
+        .env-btn:hover { border-color: #ff990060; box-shadow: 0 0 30px #ff990020; }
+        .env-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .env-btn .icon { font-size: 24px; display: block; margin-bottom: 8px; }
+        .env-btn .sub { font-size: 12px; color: #667788; font-weight: 400; margin-top: 4px; }
+
+        .env-results { margin-top: 20px; }
+        .env-section { margin-bottom: 16px; }
+        .env-section-title { font-size: 14px; font-weight: 600; color: #c0d0e0; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+        .env-items { display: grid; gap: 8px; }
+        .env-item { background: #1a2a3a; border: 1px solid #2a4055; border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; }
+        .env-item .label { font-size: 13px; color: #8899aa; }
+        .env-item .value { font-size: 13px; font-weight: 500; }
+        .env-item .value.ok { color: #22c55e; }
+        .env-item .value.fail { color: #ef4444; }
+        .env-item .value.warn { color: #f59e0b; }
+        .env-item .detail { font-size: 11px; color: #667788; margin-top: 2px; }
+
+        .env-summary { text-align: center; padding: 20px; border-radius: 12px; margin-bottom: 20px; }
+        .env-summary.passed { background: #22c55e10; border: 1px solid #22c55e40; }
+        .env-summary.failed { background: #ef444410; border: 1px solid #ef444440; }
+        .env-summary .big-icon { font-size: 48px; }
+        .env-summary .big-text { font-size: 20px; font-weight: 700; margin: 8px 0; }
+        .env-summary .issues { text-align: left; max-width: 500px; margin: 0 auto; }
+        .env-summary .issues li { color: #ef4444; font-size: 13px; padding: 4px 0; list-style: none; }
+
+        /* Accounts Table */
+        .table-wrap { background: #1a2a3a; border: 1px solid #2a4055; border-radius: 10px; overflow: hidden; }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #0d2137; padding: 12px 16px; text-align: left; font-size: 12px; color: #667788; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #2a4055; }
+        td { padding: 12px 16px; font-size: 14px; border-bottom: 1px solid #1a2a3a; }
+        tr:hover td { background: #0d2137; }
+        .empty-state { padding: 40px; text-align: center; color: #667788; }
+        .email-green { color: #22c55e; }
+
+        /* Console */
+        .actions { display: flex; gap: 12px; margin-bottom: 20px; }
+        .btn { padding: 10px 24px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; font-family: inherit; }
+        .btn-primary { background: #ff9900; color: #0f1923; }
+        .btn-primary:hover { background: #ffaa22; }
+        .btn-primary:disabled { background: #2a4055; color: #667788; cursor: not-allowed; }
+        .btn-secondary { background: #2a4055; color: #e0e0e0; }
+        .btn-secondary:hover { background: #3a5065; }
+        .btn-success { background: #22c55e; color: #0f1923; }
+        .btn-success:hover { background: #2dd96a; }
+
+        .log-wrap { background: #1a2a3a; border: 1px solid #2a4055; border-radius: 10px; padding: 16px; }
+        .log-box { min-height: 200px; max-height: 400px; overflow-y: auto; font-family: 'Monaco', 'Menlo', monospace; font-size: 12px; color: #8899aa; white-space: pre-wrap; line-height: 1.6; }
+
+        /* Mobile info */
+        .mobile-info { background: #1a2a3a; border: 1px solid #2a4055; border-radius: 10px; padding: 24px; margin-bottom: 20px; }
+        .mobile-info h3 { color: #ff9900; margin-bottom: 12px; }
+        .mobile-info code { display: block; background: #0d2137; padding: 12px; border-radius: 6px; margin: 8px 0; font-size: 13px; }
+        .mobile-info hr { border-color: #2a4055; margin: 16px 0; }
+
+        /* Toast */
+        .toast { position: fixed; bottom: 20px; right: 20px; padding: 12px 24px; border-radius: 8px; font-size: 14px; color: white; z-index: 1000; transform: translateY(100px); opacity: 0; transition: all 0.3s; }
+        .toast.show { transform: translateY(0); opacity: 1; }
+        .toast.success { background: #22c55e; }
+        .toast.error { background: #ef4444; }
+        .toast.info { background: #3b82f6; }
+
+        /* Spinner */
+        .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #2a4055; border-top-color: #ff9900; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Dep field hidden by default */
+        .dep-field { display: none; }
+        .dep-field.visible { display: block; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container { padding: 12px; }
+            .header { flex-direction: column; gap: 12px; }
+            .header-right { text-align: left; }
+            .stats { grid-template-columns: repeat(2, 1fr); }
+            .tabs { gap: 4px; }
+            .tab { font-size: 12px; padding: 8px 12px; }
+            .config-section-body { padding: 12px; }
+            .form-row { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <h1>AWS Builder ID 自动注册</h1>
+                <p>自动化注册 AWS Builder ID 账号，支持多地区 / 代理 / 指纹伪装</p>
+            </div>
+            <div class="header-right">
+                <span id="envBadge" class="badge warning" style="display:none">⚠️ 未检测环境</span>
+                <span id="configBadge" class="badge warning" style="display:none">⚙️ 未保存配置</span>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats">
+            <div class="stat-card">
+                <div class="num" id="totalCount">{{ account_count }}</div>
+                <div class="label">已注册账号</div>
+            </div>
+            <div class="stat-card">
+                <div class="num" id="statusText">{% if status.running %}🟢 运行中{% else %}⚪ 空闲{% endif %}</div>
+                <div class="label">当前状态</div>
+            </div>
+            <div class="stat-card">
+                <div class="num" style="font-size:20px; word-break:break-all" id="regionDisplay">{{ current_region }}</div>
+                <div class="label">目标地区</div>
+        </div>
+    </div>
+
+    <!-- ======= 注册流程实时状态 ======= -->
+    <div class="flow-container">
+        <div class="flow-header">
+            <span>📋 注册流程</span>
+            <span id="flowStatusText" style="font-size:12px;color:#667788">等待启动</span>
+        </div>
+        <div class="flow-scroll">
+            <div class="flow-steps" id="flowSteps"></div>
+        </div>
+        <div class="flow-error" id="flowError" style="display:none"></div>
+    </div>
+
+    <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('accounts')">📋 账号管理 <span class="badge online" id="accountBadge">{{ account_count }}</span></button>
+            <button class="tab" onclick="switchTab('config')">⚙️ 配置 <span class="badge warning" id="configTabBadge">未设置</span></button>
+            <button class="tab" onclick="switchTab('envcheck')">🔍 环境检测</button>
+            <button class="tab" onclick="switchTab('control')">🎮 控制台</button>
+            <button class="tab" onclick="switchTab('mobile')">📱 移动端</button>
+            <button class="tab" onclick="switchTab('manual')">📖 操作手册</button>
+        </div>
+
+        <!-- ======= Panel: Accounts ======= -->
+        <div id="panel-accounts" class="panel active">
+            <div class="panel-title">📋 已注册账号</div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>邮箱</th>
+                            <th>密码</th>
+                            <th>姓名</th>
+                            <th>状态</th>
+                            <th>创建时间</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if accounts %}
+                        {% for acc in accounts %}
+                        <tr>
+                            <td class="email-green">{{ acc.email }}</td>
+                            <td><code style="color:#667788">{{ acc.password[:8] }}...</code></td>
+                            <td>{{ acc.name }}</td>
+                            <td><span class="badge online">{{ acc.status }}</span></td>
+                            <td style="color:#667788">{{ acc.created_at }}</td>
+                        </tr>
+                        {% endfor %}
+                        {% else %}
+                        <tr><td colspan="5"><div class="empty-state">📭 暂无已注册账号，请先配置参数并检测环境后，在「控制台」启动注册</div></td></tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ======= Panel: Config ======= -->
+        <div id="panel-config" class="panel">
+            <div class="panel-title">⚙️ 配置参数</div>
+            
+            <div id="validateErrors" class="validation-errors"></div>
+            <div id="saveSuccess" class="save-success">✅ 配置已保存</div>
+
+            <form id="configForm" onsubmit="return handleSubmit(event)">
+                <!-- 各节由 JS 动态渲染 -->
+                <div id="configFormFields"></div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary" id="saveConfigBtn">💾 保存配置</button>
+                    <button type="button" class="btn btn-secondary" onclick="loadFields()">🔄 重置</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- ======= Panel: Environment Check ======= -->
+        <div id="panel-envcheck" class="panel">
+            <div class="panel-title">🔍 环境检测</div>
+            <p style="color:#667788; font-size:13px; margin-bottom:16px">
+                在运行注册前，先检测当前环境是否满足要求。包括 Chrome 浏览器、ChromeDriver、网络连接、IP 纯净度等。
+            </p>
+
+            <div id="envCheckArea">
+                <div class="env-check-btn-wrap">
+                    <button class="env-btn" id="startEnvCheck" onclick="runEnvCheck()">
+                        <span class="icon">🛡️</span>
+                        开始环境检测
+                        <div class="sub">检测 Chrome、网络、IP 纯净度、Worker 连通性等</div>
+                    </button>
+                </div>
+            </div>
+
+            <div id="envResults" class="env-results" style="display:none"></div>
+        </div>
+
+        <!-- ======= Panel: Control ======= -->
+        <div id="panel-control" class="panel">
+            <div class="panel-title">🎮 控制台</div>
+            <div class="actions">
+                <button class="btn btn-primary" id="startBtn" onclick="startRegistration()">🚀 启动注册</button>
+                <button class="btn btn-secondary" onclick="refreshStatus()">🔄 刷新状态</button>
+            </div>
+            
+            <div class="log-wrap">
+                <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+                    <span style="color:#667788;font-size:13px">📋 运行日志</span>
+                    <span id="runStatus" style="color:#667788;font-size:13px">⚪ 空闲</span>
+                </div>
+                <div class="log-box" id="logBox">{{ status.last_log or '暂无日志...' }}</div>
+            </div>
+        </div>
+
+        <!-- ======= Panel: Mobile ======= -->
+        <div id="panel-mobile" class="panel">
+            <div class="panel-title">📱 移动端使用说明</div>
+            <div class="mobile-info">
+                <h3>📱 通过外网访问</h3>
+                <p>当前外网地址：</p>
+                <code id="tunnelUrl">http://ja36e5a3.natappfree.cc</code>
+                <p>在手机上打开即可查看账号、启动注册、编辑配置。</p>
+                <hr>
+                <h3>📡 API 接口</h3>
+                <code>GET  /api/status      → 查询运行状态</code>
+                <code>GET  /api/accounts    → 获取账号列表</code>
+                <code>POST /api/start       → 启动注册任务</code>
+                <code>GET  /api/config      → 获取配置</code>
+                <code>POST /api/config      → 保存配置</code>
+                <code>GET  /api/check-env   → 环境检测</code>
+                <code>GET  /api/config-fields → 结构化配置</code>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <!-- ======= 操作手册 CSS ======= -->
+    <style>
+        .manual-intro { background: linear-gradient(135deg, #1a2a3a 0%, #0d2137 100%); border: 1px solid #2a4055; border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+        .manual-intro h2 { color: #ff9900; font-size: 22px; margin-bottom: 8px; }
+        .manual-intro p { color: #8899aa; font-size: 14px; line-height: 1.6; }
+        .manual-step { background: #1a2a3a; border: 1px solid #2a4055; border-radius: 10px; margin-bottom: 16px; overflow: hidden; }
+        .manual-step-header { padding: 14px 20px; background: #0d2137; border-bottom: 1px solid #2a4055; cursor: pointer; display: flex; align-items: center; gap: 12px; user-select: none; }
+        .manual-step-header .step-num { width: 32px; height: 32px; background: #ff9900; color: #0f1923; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex-shrink: 0; }
+        .manual-step-header h3 { font-size: 15px; color: #e0e0e0; }
+        .manual-step-header .step-arrow { margin-left: auto; font-size: 12px; transition: transform 0.2s; color: #667788; }
+        .manual-step-header .step-arrow.open { transform: rotate(180deg); }
+        .manual-step-body { padding: 20px; display: none; line-height: 1.8; font-size: 14px; color: #c0d0e0; }
+        .manual-step-body.open { display: block; }
+        .manual-step-body p { margin-bottom: 12px; }
+        .manual-step-body code { background: #0d2137; padding: 2px 8px; border-radius: 4px; font-size: 13px; color: #ff9900; }
+        .manual-step-body pre { background: #0d2137; border: 1px solid #2a4055; border-radius: 8px; padding: 16px; overflow-x: auto; font-size: 13px; line-height: 1.6; margin: 12px 0; color: #e0e0e0; }
+        .manual-step-body .tip { background: #f59e0b15; border: 1px solid #f59e0b30; border-radius: 8px; padding: 12px 16px; margin: 12px 0; color: #fbbf24; font-size: 13px; }
+        .manual-step-body .warn { background: #ef444415; border: 1px solid #ef444430; border-radius: 8px; padding: 12px 16px; margin: 12px 0; color: #ef4444; font-size: 13px; }
+        .manual-step-body .success-box { background: #22c55e15; border: 1px solid #22c55e30; border-radius: 8px; padding: 12px 16px; margin: 12px 0; color: #22c55e; font-size: 13px; }
+        .manual-step-body ul, .manual-step-body ol { padding-left: 20px; margin-bottom: 12px; }
+        .manual-step-body li { margin-bottom: 6px; }
+        .manual-step-body strong { color: #fff; }
+        .manual-step-body img.placeholder { display: block; max-width: 100%; border-radius: 8px; border: 1px solid #2a4055; margin: 12px 0; }
+        .manual-faq { background: #1a2a3a; border: 1px solid #2a4055; border-radius: 10px; padding: 20px; margin-top: 20px; }
+        .manual-faq h3 { color: #ff9900; margin-bottom: 16px; }
+        .manual-faq details { margin-bottom: 12px; }
+        .manual-faq summary { cursor: pointer; color: #e0e0e0; font-weight: 500; padding: 8px 0; }
+        .manual-faq summary:hover { color: #ff9900; }
+        .manual-faq .faq-answer { padding: 8px 0 8px 16px; color: #8899aa; font-size: 13px; line-height: 1.6; border-left: 2px solid #2a4055; margin-top: 4px; }
+    </style>
+
+    <!-- ======= Flow Diagram CSS ======= -->
+    <style>
+        .flow-container { background: #1a2a3a; border: 1px solid #2a4055; border-radius: 10px; margin-bottom: 16px; overflow: hidden; }
+        .flow-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; background: #0d2137; border-bottom: 1px solid #2a4055; font-size: 13px; font-weight: 600; color: #c0d0e0; }
+        .flow-error { padding: 10px 16px; background: #ef444415; border-top: 1px solid #ef444430; color: #ef4444; font-size: 12px; line-height: 1.5; word-break: break-all; }
+        .flow-scroll { overflow-x: auto; padding: 16px 20px; -webkit-overflow-scrolling: touch; }
+        .flow-scroll::-webkit-scrollbar { height: 4px; }
+        .flow-scroll::-webkit-scrollbar-track { background: transparent; }
+        .flow-scroll::-webkit-scrollbar-thumb { background: #2a4055; border-radius: 2px; }
+        .flow-steps { display: flex; align-items: flex-start; gap: 0; min-width: max-content; }
+        .flow-step { display: flex; flex-direction: column; align-items: center; min-width: 88px; max-width: 88px; position: relative; }
+        .flow-step-icon { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; border: 2px solid #2a4055; background: #0d2137; transition: all 0.3s; position: relative; z-index: 2; flex-shrink: 0; }
+        .flow-step-icon .emoji { line-height: 1; }
+        .flow-step-icon.pending { border-color: #2a4055; background: #0d2137; opacity: 0.5; }
+        .flow-step-icon.waiting { border-color: #2a4055; background: #0d2137; opacity: 0.7; }
+        .flow-step-icon.running { border-color: #60a5fa; background: #1e3a5f; box-shadow: 0 0 12px #60a5fa40; animation: pulse-blue 1.5s infinite; }
+        .flow-step-icon.done { border-color: #22c55e; background: #22c55e20; }
+        .flow-step-icon.error { border-color: #ef4444; background: #ef444420; animation: shake 0.5s; }
+        @keyframes pulse-blue { 0%,100% { box-shadow: 0 0 8px #60a5fa30; } 50% { box-shadow: 0 0 20px #60a5fa60; } }
+        @keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
+        .flow-step-label { font-size: 10px; color: #667788; margin-top: 6px; text-align: center; line-height: 1.3; white-space: nowrap; }
+        .flow-step.active .flow-step-label { color: #c0d0e0; font-weight: 500; }
+        .flow-step.done .flow-step-label { color: #22c55e; }
+        .flow-step.error .flow-step-label { color: #ef4444; }
+        .flow-connector { width: 20px; height: 2px; background: #2a4055; align-self: center; margin: 0 -2px; position: relative; z-index: 1; flex-shrink: 0; }
+        .flow-connector.done { background: #22c55e; }
+        .flow-connector.active { background: #60a5fa; }
+        .flow-step-status-dot { width: 8px; height: 8px; border-radius: 50%; position: absolute; bottom: -2px; right: -2px; border: 2px solid #1a2a3a; }
+        .flow-step-status-dot.running { background: #60a5fa; }
+        .flow-step-status-dot.done { background: #22c55e; }
+        .flow-step-status-dot.error { background: #ef4444; }
+        @media (max-width: 600px) {
+            .flow-scroll { padding: 12px 12px; }
+            .flow-step { min-width: 72px; max-width: 72px; }
+        }
+    </style>
+
+    <!-- ======= Panel: 操作手册 ======= -->
+    <div id="panel-manual" class="panel">
+        <div class="panel-title">📖 操作手册（小白版）</div>
+
+        <div class="manual-intro">
+            <h2>🎯 总体流程（4步）</h2>
+            <p>
+                <strong>① 准备域名 → ② 部署邮箱 Worker → ③ 填写配置 → ④ 启动注册</strong><br>
+                下面每一步都有详细说明，跟着做就行 👇
+            </p>
+        </div>
+
+        <!-- 第1步 -->
+        <div class="manual-step">
+            <div class="manual-step-header" onclick="toggleManual('step1')">
+                <span class="step-num">1</span>
+                <h3>准备一个域名</h3>
+                <span class="step-arrow open" id="arrow-step1">▼</span>
+            </div>
+            <div class="manual-step-body open" id="step1">
+                <p>你需要一个自己的域名来接收 AWS 验证邮件。如果你没有，可以去买一个便宜的。</p>
+                
+                <p><strong>推荐购买域名的地方：</strong></p>
+                <ul>
+                    <li><strong>Namesilo</strong>（最便宜，约 ¥20/年，含隐私保护）</li>
+                    <li><strong>阿里云 / 腾讯云</strong>（国内平台，可以买 .xyz .top 等便宜域名）</li>
+                    <li><strong>Cloudflare Registrar</strong>（成本价，没有加价）</li>
+                </ul>
+
+                <div class="tip">💡 新手建议买一个 <strong>.xyz</strong> 或 <strong>.top</strong> 域名，一年才几块钱。不用买贵的！</div>
+            </div>
+        </div>
+
+        <!-- 第2步 -->
+        <div class="manual-step">
+            <div class="manual-step-header" onclick="toggleManual('step2')">
+                <span class="step-num">2</span>
+                <h3>将域名托管到 Cloudflare（免费）</h3>
+                <span class="step-arrow open" id="arrow-step2">▼</span>
+            </div>
+            <div class="manual-step-body open" id="step2">
+                <p>Cloudflare 提供免费的 DNS 托管和邮件转发服务，是整套方案的核心。</p>
+
+                <p><strong>操作步骤：</strong></p>
+                <ol>
+                    <li>打开 <a href="https://dash.cloudflare.com" target="_blank" style="color:#60a5fa">https://dash.cloudflare.com</a> 并注册账号（免费）</li>
+                    <li>登录后点击「添加站点 (Add site)」</li>
+                    <li>输入你刚买的域名（比如 <code>example.xyz</code>），点击「添加」</li>
+                    <li>选择 <strong>Free（免费）</strong> 计划</li>
+                    <li>Cloudflare 会扫描你的 DNS 记录，直接点「继续」</li>
+                    <li>它会给你两个 <strong>Cloudflare 名称服务器（Nameserver）</strong>，类似：<br>
+                        <code>daisy.ns.cloudflare.com</code><br>
+                        <code>jake.ns.cloudflare.com</code></li>
+                    <li>去你买域名的地方，把 DNS 服务器改成上面这两个</li>
+                    <li>等待 5-30 分钟，Cloudflare 显示「活动中 (Active)」就 OK 了</li>
+                </ol>
+
+                <div class="tip">💡 不懂怎么改 Nameserver？去你买域名的网站搜「修改 DNS 服务器」或「Nameserver 设置」，把原来的替换成 Cloudflare 给的那两个。</div>
+            </div>
+        </div>
+
+        <!-- 第3步 -->
+        <div class="manual-step">
+            <div class="manual-step-header" onclick="toggleManual('step3')">
+                <span class="step-num">3</span>
+                <h3>部署临时邮箱 Worker（最关键的一步）</h3>
+                <span class="step-arrow open" id="arrow-step3">▼</span>
+            </div>
+            <div class="manual-step-body open" id="step3">
+                <p>这个 Worker 负责：<strong>创建临时收件箱 → 接收 AWS 验证邮件 → 让注册机取回验证码</strong></p>
+                <p>我们用的是 <code>cloudflare_temp_email</code> 这个开源项目，一键部署。</p>
+
+                <p><strong>操作步骤：</strong></p>
+                <ol>
+                    <li>打开 <a href="https://github.com/dreamhunter2333/cloudflare_temp_email" target="_blank" style="color:#60a5fa">cloudflare_temp_email 项目</a></li>
+                    <li>点 <strong>「Deploy with Workers」</strong> 按钮（或者在项目里找一键部署链接）</li>
+                    <li>会跳转到 Cloudflare Dashboard，选择你的账号</li>
+                    <li>给你的 Worker 起个名字，比如 <code>temp-mail</code></li>
+                    <li>点「部署 (Deploy)」，等十几秒就好了</li>
+                    <li>部署完成后，你会得到一个 Worker URL：<br>
+                        <code>https://temp-mail.你的子域名.workers.dev</code></li>
+                </ol>
+
+                <div class="tip">💡 部署完成后，先测试一下。在浏览器打开 <code>https://你的worker地址/api/new_address</code>，应该返回一段 JSON。</div>
+            </div>
+        </div>
+
+        <!-- 第4步 -->
+        <div class="manual-step">
+            <div class="manual-step-header" onclick="toggleManual('step4')">
+                <span class="step-num">4</span>
+                <h3>配置 Cloudflare Email Routing</h3>
+                <span class="step-arrow open" id="arrow-step4">▼</span>
+            </div>
+            <div class="manual-step-body open" id="step4">
+                <p>这一步告诉 Cloudflare：「所有发到 <code>xxx@你的域名</code> 的邮件，都转发给 Worker 处理」</p>
+
+                <p><strong>操作步骤：</strong></p>
+                <ol>
+                    <li>登录 <a href="https://dash.cloudflare.com" target="_blank" style="color:#60a5fa">Cloudflare Dashboard</a></li>
+                    <li>点击你的域名进入管理页面</li>
+                    <li>左侧菜单找到 <strong>「Email」→「Email Routing」</strong></li>
+                    <li>点击「开始使用 (Get started)」</li>
+                    <li>选择 <strong>Free（免费）</strong> 计划</li>
+                    <li>填写你的邮箱（用于验证域名所有权），收验证码验证</li>
+                    <li>验证完成后，点击 <strong>「Catch-All 地址」</strong> 或 <strong>「Routing rules」</strong></li>
+                    <li>添加一条规则：<br>
+                        - 操作：<strong>「发送到 Worker」</strong><br>
+                        - Worker 选择：你刚刚部署的 Worker（比如 <code>temp-mail</code>）<br>
+                        - 点击保存</li>
+                    <li>确保 Catch-All 状态是 <strong>「Enabled」</strong></li>
+                </ol>
+
+                <div class="success-box">✅ 到这一步，邮箱服务就配好了！你的 Worker URL 和域名就是下面配置页面要填的内容。</div>
+
+                <p><strong>📌 记住这两个值，待会要用：</strong></p>
+                <ul>
+                    <li><strong>Worker URL</strong> → 格式如 <code>https://temp-mail.xxx.workers.dev</code>（从第3步得到）</li>
+                    <li><strong>域名</strong> → 你的域名，如 <code>example.xyz</code></li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 第5步 -->
+        <div class="manual-step">
+            <div class="manual-step-header" onclick="toggleManual('step5')">
+                <span class="step-num">5</span>
+                <h3>在页面填写配置并运行</h3>
+                <span class="step-arrow open" id="arrow-step5">▼</span>
+            </div>
+            <div class="manual-step-body open" id="step5">
+                <p>回到本页面的 <strong>「⚙️ 配置」</strong> Tab，填写以下必填项：</p>
+
+                <table style="width:100%;border-collapse:collapse;margin:12px 0;">
+                    <tr style="background:#0d2137;">
+                        <th style="padding:10px 14px;text-align:left;font-size:13px;border:1px solid #2a4055;">字段</th>
+                        <th style="padding:10px 14px;text-align:left;font-size:13px;border:1px solid #2a4055;">填什么</th>
+                        <th style="padding:10px 14px;text-align:left;font-size:13px;border:1px solid #2a4055;">从哪里获取</th>
+                    </tr>
+                    <tr>
+                        <td style="padding:10px 14px;border:1px solid #2a4055;font-weight:600;color:#ff9900;">Worker 地址 ⭐</td>
+                        <td style="padding:10px 14px;border:1px solid #2a4055;"><code>https://temp-mail.xxx.workers.dev</code></td>
+                        <td style="padding:10px 14px;border:1px solid #2a4055;">第3步部署完成后得到的 URL</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:10px 14px;border:1px solid #2a4055;font-weight:600;color:#ff9900;">邮箱域名 ⭐</td>
+                        <td style="padding:10px 14px;border:1px solid #2a4055;"><code>example.xyz</code></td>
+                        <td style="padding:10px 14px;border:1px solid #2a4055;">你买的域名，已托管到 Cloudflare</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:10px 14px;border:1px solid #2a4055;font-weight:600;color:#ff9900;">目标地区 ⭐</td>
+                        <td style="padding:10px 14px;border:1px solid #2a4055;">美国 / 德国 / 日本</td>
+                        <td style="padding:10px 14px;border:1px solid #2a4055;">建议选美国 (USA)</td>
+                    </tr>
+                </table>
+
+                <p><strong>然后按步骤操作：</strong></p>
+                <ol>
+                    <li>点击「<strong>🔍 环境检测</strong>」Tab → 点「开始检测」，确保所有项都通过</li>
+                    <li>确认 Chrome ✅、ChromeDriver ✅、IP 纯净度 OK（风险分低于 50）</li>
+                    <li>点击「<strong>🎮 控制台</strong>」Tab</li>
+                    <li>点击「<strong>🚀 启动注册</strong>」按钮</li>
+                    <li>等待运行完成，日志会显示注册进度</li>
+                    <li>注册成功的账号会出现在「<strong>📋 账号管理</strong>」Tab</li>
+                </ol>
+
+                <div class="tip">💡 第一次运行建议把「无头模式」去掉勾选（关掉），这样能看到浏览器窗口在做什么。调试没问题再勾上。</div>
+                <div class="warn">⚠️ 如果没有配置代理，注册机会用本机 IP。请确保 IP 属地和你选的地区一致（比如选美国就要用美国 IP）</div>
+            </div>
+        </div>
+
+        <!-- FAQ -->
+        <div class="manual-faq">
+            <h3>❓ 常见问题</h3>
+
+            <details>
+                <summary>我没有域名怎么办？</summary>
+                <div class="faq-answer">去买一个便宜的。推荐 <strong>.xyz</strong> 或 <strong>.top</strong>，一年只需 ¥5-¥20。推荐 Namesilo 或 阿里云。</div>
+            </details>
+
+            <details>
+                <summary>一定要用 Cloudflare 吗？</summary>
+                <div class="faq-answer">是的，这套方案依赖 Cloudflare 的 Email Routing（免费）和 Workers（免费额度足够）。如果已经有域名在其他平台，可以免费转入 Cloudflare。</div>
+            </details>
+
+            <details>
+                <summary>Worker 部署后怎么测试能不能用？</summary>
+                <div class="faq-answer">在浏览器打开 <code>https://你的worker地址/api/new_address</code>，如果返回类似 <code>{"address":"xxx@你的域名"}</code> 的 JSON，说明 Worker 正常工作。</div>
+            </details>
+
+            <details>
+                <summary>环境检测显示 IP 风险高怎么办？</summary>
+                <div class="faq-answer">如果 IP 被标记为代理或数据中心，AWS 可能会阻止注册。建议使用<strong>住宅代理</strong>（家庭宽带 IP）。在配置页勾选「启用代理」，填入住宅代理地址。免费的机房 IP 很容易被 AWS 拦截。</div>
+            </details>
+
+            <details>
+                <summary>注册失败了，怎么看原因？</summary>
+                <div class="faq-answer">去「控制台」Tab 看日志。常见失败原因：① 邮箱 Worker 没配好（验证码收不到）② IP 被 AWS 拦截 ③ 浏览器检测到自动化。可以根据日志中的错误信息排查。</div>
+            </details>
+
+            <details>
+                <summary>注册一个账号要多久？</summary>
+                <div class="faq-answer">通常 <strong>1-3 分钟</strong>。主要耗时在等待验证邮件（约 30-60 秒）和填写表单。</div>
+            </details>
+
+            <details>
+                <summary>这个工具安全吗？</summary>
+                <div class="faq-answer">所有操作都在你自己的服务器上运行，账号信息保存在本地 <code>accounts.jsonl</code> 文件中，不会上传到任何第三方。</div>
+            </details>
+        </div>
+    </div>
+
+    <script>
+        // ======== 全局数据 ========
+        const FIELD_DEFS = {{ field_definitions_json|safe }};
+        const SECTION_META = {{ section_meta_json|safe }};
+        let currentFields = {{ config_fields_json|safe }};
+        let configDirty = false;
+
+        // ======== 工具函数 ========
+        function switchTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById('panel-' + name).classList.add('active');
+            if (name === 'config') renderConfigForm();
+            localStorage.setItem('aws_tab', name);
+        }
+
+        function toggleManual(id) {
+            const body = document.getElementById(id);
+            const arrow = document.getElementById('arrow-' + id);
+            if (!body || !arrow) return;
+            body.classList.toggle('open');
+            arrow.classList.toggle('open');
+        }
+
+        function showToast(msg, type='success') {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = 'toast ' + type + ' show';
+            setTimeout(() => t.classList.remove('show'), 3000);
+        }
+
+        function getFieldValue(key) {
+            const el = document.querySelector(`[name="${key}"]`);
+            if (!el) return undefined;
+            if (el.type === 'checkbox') return el.checked;
+            if (el.type === 'number') return el.value === '' ? '' : Number(el.value);
+            return el.value;
+        }
+
+        function setFieldValue(key, val) {
+            const el = document.querySelector(`[name="${key}"]`);
+            if (!el) return;
+            if (el.type === 'checkbox') el.checked = !!val;
+            else el.value = val == null ? '' : String(val);
+        }
+
+        // ======== 渲染配置表单 ========
+        function renderConfigForm() {
+            const sections = {};
+            FIELD_DEFS.forEach(f => {
+                if (!sections[f.section]) sections[f.section] = [];
+                sections[f.section].push(f);
+            });
+
+            const container = document.getElementById('configFormFields');
+            container.innerHTML = '';
+
+            Object.entries(SECTION_META).forEach(([key, meta]) => {
+                if (!sections[key]) return;
+                const fields = sections[key];
+                const sectionId = 'section-' + key;
+                const div = document.createElement('div');
+                div.className = 'config-section';
+                
+                let headerHtml = `
+                    <div class="config-section-header" onclick="toggleSection('${sectionId}')">
+                        <div>
+                            <h3>${meta.title}</h3>
+                            <div class="section-desc">${meta.desc}</div>
+                        </div>
+                        <span class="arrow open" id="arrow-${sectionId}">▼</span>
+                    </div>
+                    <div class="config-section-body open" id="${sectionId}">
+                `;
+
+                let bodyHtml = '';
+                fields.forEach(f => {
+                    const value = currentFields[f.key] !== undefined ? currentFields[f.key] : (f.default !== undefined ? f.default : '');
+                    const required = f.required ? '<span class="required">*</span>' : '';
+                    const requiredAttr = f.required ? 'required' : '';
+                    const depAttr = f.depends_on ? `data-dep-field="${f.depends_on.field}" data-dep-value="${f.depends_on.value}"` : '';
+                    const depClass = f.depends_on ? 'dep-field' : '';
+
+                    let inputHtml = '';
+                    if (f.type === 'checkbox') {
+                        const checked = value ? 'checked' : '';
+                        inputHtml = `
+                            <div class="checkbox-group">
+                                <input type="checkbox" name="${f.key}" id="field-${f.key}" ${checked} ${depAttr} class="${depClass}" onchange="onFieldChange('${f.key}')">
+                                <label class="checkbox-label" for="field-${f.key}">${f.description}</label>
+                            </div>
+                        `;
+                    } else if (f.type === 'select') {
+                        const opts = (f.options || []).map(o => 
+                            `<option value="${o.value}" ${String(value) === String(o.value) ? 'selected' : ''}>${o.label}</option>`
+                        ).join('');
+                        inputHtml = `
+                            <select name="${f.key}" id="field-${f.key}" class="form-control ${depClass}" ${depAttr} ${requiredAttr} onchange="onFieldChange('${f.key}')">
+                                ${opts}
+                            </select>
+                        `;
+                    } else if (f.type === 'textarea') {
+                        inputHtml = `
+                            <textarea name="${f.key}" id="field-${f.key}" class="form-control ${depClass}" ${depAttr} ${requiredAttr} placeholder="${f.placeholder || ''}" onchange="onFieldChange('${f.key}')" rows="4">${value}</textarea>
+                        `;
+                    } else {
+                        const inputType = f.type === 'password' ? 'password' : (f.type === 'url' ? 'url' : 'text');
+                        inputHtml = `
+                            <input type="${inputType}" name="${f.key}" id="field-${f.key}" class="form-control ${depClass}" ${depAttr} ${requiredAttr} value="${String(value).replace(/"/g, '&quot;')}" placeholder="${f.placeholder || ''}" onchange="onFieldChange('${f.key}')">
+                        `;
+                    }
+
+                    bodyHtml += `
+                        <div class="form-group ${depClass}" id="group-${f.key}" ${depAttr}>
+                            <label class="form-label" for="field-${f.key}">${f.label}${required}</label>
+                            <div class="form-desc">${f.description}</div>
+                            ${inputHtml}
+                            <div class="field-error" id="error-${f.key}">此项为必填</div>
+                        </div>
+                    `;
+                });
+
+                div.innerHTML = headerHtml + bodyHtml + '</div>';
+                container.appendChild(div);
+
+                // Apply dep visibility
+                fields.filter(f => f.depends_on).forEach(f => applyDepVisibility(f.key));
+            });
+        }
+
+        function toggleSection(id) {
+            const body = document.getElementById(id);
+            const arrow = document.getElementById('arrow-' + id);
+            if (!body || !arrow) return;
+            body.classList.toggle('open');
+            arrow.classList.toggle('open');
+        }
+
+        function onFieldChange(key) {
+            configDirty = true;
+            updateConfigBadge();
+            // Update local fields
+            currentFields[key] = getFieldValue(key);
+            // Apply dependent visibility
+            FIELD_DEFS.filter(f => f.depends_on && f.depends_on.field === key).forEach(f => applyDepVisibility(f.key));
+            // Clear error on change
+            const errEl = document.getElementById('error-' + key);
+            if (errEl) errEl.classList.remove('show');
+            const inputEl = document.querySelector(`[name="${key}"]`);
+            if (inputEl) inputEl.classList.remove('error');
+        }
+
+        function applyDepVisibility(fieldKey) {
+            const def = FIELD_DEFS.find(f => f.key === fieldKey);
+            if (!def || !def.depends_on) return;
+            const parentVal = getFieldValue(def.depends_on.field);
+            const shouldShow = String(parentVal) === String(def.depends_on.value);
+            
+            const group = document.getElementById('group-' + fieldKey);
+            if (group) {
+                group.classList.toggle('visible', shouldShow);
+            }
+            const input = document.querySelector(`[name="${fieldKey}"]`);
+            if (input) {
+                input.classList.toggle('visible', shouldShow);
+            }
+        }
+
+        function updateConfigBadge() {
+            const badge = document.getElementById('configTabBadge');
+            if (badge) {
+                badge.textContent = configDirty ? '⚠️ 未保存' : '已设置';
+                badge.className = 'badge ' + (configDirty ? 'offline' : 'online');
+            }
+        }
+
+        // ======== 表单提交 ========
+        function handleSubmit(e) {
+            e.preventDefault();
+            
+            // 验证必填项
+            const errors = [];
+            FIELD_DEFS.forEach(f => {
+                if (!f.required) return;
+                const group = document.getElementById('group-' + f.key);
+                // Skip if hidden by dep
+                if (group && group.classList.contains('dep-field') && !group.classList.contains('visible')) return;
+                
+                const val = getFieldValue(f.key);
+                if (val === undefined || val === '' || val === null) {
+                    errors.push(f.label);
+                    const errEl = document.getElementById('error-' + f.key);
+                    if (errEl) errEl.classList.add('show');
+                    const inputEl = document.querySelector(`[name="${f.key}"]`);
+                    if (inputEl) inputEl.classList.add('error');
+                }
+            });
+
+            if (errors.length > 0) {
+                const errContainer = document.getElementById('validateErrors');
+                errContainer.innerHTML = '<div style="font-weight:600;margin-bottom:8px;color:#ef4444">❌ 请填写以下必填项：</div>' + 
+                    errors.map(e => `<div class="error-item">• ${e}</div>`).join('');
+                errContainer.classList.add('show');
+                document.getElementById('saveSuccess').classList.remove('show');
+                return false;
+            }
+
+            // 收集所有字段值
+            const data = {};
+            FIELD_DEFS.forEach(f => {
+                const val = getFieldValue(f.key);
+                if (val !== undefined) data[f.key] = val;
+            });
+
+            // 提交
+            const btn = document.getElementById('saveConfigBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ 保存中...';
+
+            fetch('/api/config-fields', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data),
+            })
+            .then(r => r.json())
+            .then(resp => {
+                btn.disabled = false;
+                btn.textContent = '💾 保存配置';
+                if (resp.success) {
+                    document.getElementById('saveSuccess').classList.add('show');
+                    document.getElementById('validateErrors').classList.remove('show');
+                    currentFields = data;
+                    configDirty = false;
+                    updateConfigBadge();
+                    showToast('✅ 配置已保存');
+                    // 刷新配置 badge 状态
+                    loadConfigStatus();
+                } else {
+                    showToast('❌ ' + resp.message, 'error');
+                }
+            })
+            .catch(err => {
+                btn.disabled = false;
+                btn.textContent = '💾 保存配置';
+                showToast('❌ 保存失败: ' + err.message, 'error');
+            });
+
+            return false;
+        }
+
+        function loadFields() {
+            fetch('/api/config-fields')
+                .then(r => r.json())
+                .then(data => {
+                    currentFields = data.fields || {};
+                    renderConfigForm();
+                    configDirty = false;
+                    updateConfigBadge();
+                    showToast('🔄 已加载最新配置', 'info');
+                })
+                .catch(err => showToast('❌ 加载失败: ' + err.message, 'error'));
+        }
+
+        function loadConfigStatus() {
+            fetch('/api/config')
+                .then(r => r.json())
+                .then(data => {
+                    const hasConfig = data.config && data.config.length > 100;
+                    const badge = document.getElementById('configTabBadge');
+                    if (badge) {
+                        badge.textContent = hasConfig ? '✅ 已配置' : '⚠️ 未设置';
+                        badge.className = 'badge ' + (hasConfig ? 'online' : 'warning');
+                    }
+                })
+                .catch(() => {});
+        }
+
+        // ======== 环境检测 ========
+        function runEnvCheck() {
+            const btn = document.getElementById('startEnvCheck');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> 检测中...<div class="sub">正在检测环境，请稍候...</div>';
+
+            document.getElementById('envResults').style.display = 'none';
+
+            fetch('/api/check-env')
+                .then(r => r.json())
+                .then(data => renderEnvResults(data))
+                .catch(err => {
+                    document.getElementById('envResults').innerHTML = `
+                        <div class="env-summary failed">
+                            <div class="big-icon">❌</div>
+                            <div class="big-text">检测失败</div>
+                            <div style="color:#ef4444">${err.message}</div>
+                        </div>
+                    `;
+                    document.getElementById('envResults').style.display = 'block';
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.innerHTML = `
+                        <span class="icon">🛡️</span>
+                        重新检测
+                        <div class="sub">点击再次检测环境</div>
+                    `;
+                });
+        }
+
+        function renderEnvResults(data) {
+            const container = document.getElementById('envResults');
+            container.style.display = 'block';
+
+            // Summary
+            let summaryHtml = '';
+            if (data.summary) {
+                const passed = data.summary.passed;
+                summaryHtml = `
+                    <div class="env-summary ${passed ? 'passed' : 'failed'}">
+                        <div class="big-icon">${passed ? '✅' : '⚠️'}</div>
+                        <div class="big-text">${passed ? '环境就绪 ✅' : '环境存在问题 ⚠️'}</div>
+                        <div style="color:#667788;font-size:13px">
+                            ${data.summary.total_checks || '?'} 项检查
+                        </div>
+                        ${(!passed && data.summary.issues && data.summary.issues.length > 0) ? `
+                            <div class="issues" style="margin-top:12px">
+                                ${data.summary.issues.map(i => `<li>${i}</li>`).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }
+
+            // Chrome
+            let chromeHtml = '';
+            if (data.chrome) {
+                const ok = data.chrome.found;
+                chromeHtml = `
+                    <div class="env-section">
+                        <div class="env-section-title">🌐 Chrome 浏览器</div>
+                        <div class="env-items">
+                            <div class="env-item">
+                                <div>
+                                    <div class="label">浏览器状态</div>
+                                    ${data.chrome.version ? `<div class="detail">${data.chrome.version}</div>` : ''}
+                                </div>
+                                <div class="value ${ok ? 'ok' : 'fail'}">${ok ? '✅ 正常' : '❌ 未安装'}</div>
+                            </div>
+                            ${data.chrome.path ? `<div class="env-item"><div class="label">路径</div><div class="value" style="font-size:11px;color:#667788">${data.chrome.path}</div></div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // ChromeDriver
+            let driverHtml = '';
+            if (data.chromedriver) {
+                const ok = data.chromedriver.found;
+                driverHtml = `
+                    <div class="env-section">
+                        <div class="env-section-title">🔧 ChromeDriver</div>
+                        <div class="env-items">
+                            <div class="env-item">
+                                <div>
+                                    <div class="label">Driver 状态</div>
+                                    ${data.chromedriver.version ? `<div class="detail">${data.chromedriver.version}</div>` : ''}
+                                </div>
+                                <div class="value ${ok ? 'ok' : 'fail'}">${ok ? '✅ 正常' : '❌ 未安装'}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Python packages
+            let pkgHtml = '';
+            if (data.packages) {
+                const items = Object.entries(data.packages).map(([k, v]) => `
+                    <div class="env-item">
+                        <div class="label">${k}</div>
+                        <div class="value ${v ? 'ok' : 'fail'}">${v ? '✅ 已安装' : '❌ 缺失'}</div>
+                    </div>
+                `).join('');
+                pkgHtml = `
+                    <div class="env-section">
+                        <div class="env-section-title">🐍 Python 依赖</div>
+                        <div class="env-items">${items}</div>
+                    </div>
+                `;
+            }
+
+            // Network / IP
+            let netHtml = '';
+            if (data.network) {
+                const net = data.network;
+                const ipOk = net.public_ip ? true : false;
+                const risk = net.risk_score;
+                const riskLevel = risk ? (risk.score > 60 ? 'fail' : (risk.score > 30 ? 'warn' : 'ok')) : 'ok';
+                const riskLabel = risk ? (risk.score > 60 ? '⚠️ 高危' : (risk.score > 30 ? '⚠️ 中风险' : '✅ 安全')) : '未知';
+
+                netHtml = `
+                    <div class="env-section">
+                        <div class="env-section-title">🌍 网络 & IP 检测</div>
+                        <div class="env-items">
+                            <div class="env-item">
+                                <div class="label">公网 IP</div>
+                                <div class="value ${ipOk ? 'ok' : 'fail'}">${net.public_ip || '检测失败'}</div>
+                            </div>
+                            ${net.location ? `<div class="env-item"><div class="label">地理位置</div><div class="value">${net.location}</div></div>` : ''}
+                            ${net.isp ? `<div class="env-item"><div class="label">ISP 运营商</div><div class="value" style="font-size:12px">${net.isp}</div></div>` : ''}
+                            ${net.is_proxy !== undefined ? `<div class="env-item">
+                                <div class="label">代理/VPN 标记</div>
+                                <div class="value ${net.is_proxy ? 'warn' : 'ok'}">${net.is_proxy ? '⚠️ 是' : '✅ 否'}</div>
+                            </div>` : ''}
+                            ${net.hosting !== undefined ? `<div class="env-item">
+                                <div class="label">数据中心 IP</div>
+                                <div class="value ${net.hosting ? 'warn' : 'ok'}">${net.hosting ? '⚠️ 是' : '✅ 否'}</div>
+                            </div>` : ''}
+                            ${risk ? `<div class="env-item">
+                                <div class="label">
+                                    IP 纯净度评分
+                                    ${risk.reasons.length ? `<div class="detail">${risk.reasons.join('; ')}</div>` : '<div class="detail">IP 纯净，适合注册</div>'}
+                                </div>
+                                <div class="value ${riskLevel}">${riskLabel} (${risk.score}/100)</div>
+                            </div>` : ''}
+                            ${net.error ? `<div class="env-item"><div class="label">错误</div><div class="value fail">${net.error}</div></div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Email worker
+            let emailHtml = '';
+            if (data.email_worker) {
+                const ok = data.email_worker.reachable;
+                emailHtml = `
+                    <div class="env-section">
+                        <div class="env-section-title">📧 邮箱 Worker</div>
+                        <div class="env-items">
+                            <div class="env-item">
+                                <div class="label">连通性</div>
+                                <div class="value ${ok ? 'ok' : 'fail'}">${ok ? '✅ 可达' : (data.email_worker.error ? '❌ ' + data.email_worker.error : '❌ 不可达')}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // System
+            let sysHtml = '';
+            if (data.system) {
+                sysHtml = `
+                    <div class="env-section">
+                        <div class="env-section-title">💻 系统信息</div>
+                        <div class="env-items">
+                            <div class="env-item"><div class="label">平台</div><div class="value" style="font-size:12px">${data.system.platform || '?'}</div></div>
+                            <div class="env-item"><div class="label">Python</div><div class="value" style="font-size:12px">${(data.system.python || '').split(' ')[0] || '?'}</div></div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            container.innerHTML = summaryHtml + chromeHtml + driverHtml + pkgHtml + netHtml + emailHtml + sysHtml;
+
+            // Update env badge
+            const badge = document.getElementById('envBadge');
+            if (badge) {
+                badge.style.display = 'inline-block';
+                if (data.summary && data.summary.passed) {
+                    badge.textContent = '✅ 环境就绪';
+                    badge.className = 'badge online';
+                } else {
+                    badge.textContent = '⚠️ 环境异常';
+                    badge.className = 'badge offline';
+                }
+            }
+        }
+
+        // ======== 控制台功能 ========
+        async function startRegistration() {
+            const btn = document.getElementById('startBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ 注册中...';
+            try {
+                const res = await fetch('/api/start', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('✅ ' + data.message);
+                    pollStatus();
+                } else {
+                    showToast('❌ ' + data.message, 'error');
+                    btn.disabled = false;
+                    btn.textContent = '🚀 启动注册';
+                }
+            } catch(e) {
+                showToast('❌ 请求失败: ' + e.message, 'error');
+                btn.disabled = false;
+                btn.textContent = '🚀 启动注册';
+            }
+        }
+
+        async function refreshStatus() {
+            try {
+                const res = await fetch('/api/status');
+                const data = await res.json();
+                document.getElementById('statusText').textContent = data.running ? '🟢 运行中' : '⚪ 空闲';
+                document.getElementById('runStatus').textContent = data.running ? '🟢 运行中' : '⚪ 空闲';
+                document.getElementById('totalCount').textContent = data.account_count;
+                const badge = document.getElementById('accountBadge');
+                if (badge) badge.textContent = data.account_count;
+                if (data.last_log) {
+                    document.getElementById('logBox').textContent = data.last_log;
+                    document.getElementById('logBox').scrollTop = document.getElementById('logBox').scrollHeight;
+                }
+                const btn = document.getElementById('startBtn');
+                if (data.running) {
+                    btn.disabled = true;
+                    btn.textContent = '⏳ 注册中...';
+                } else {
+                    btn.disabled = false;
+                    btn.textContent = '🚀 启动注册';
+                }
+            } catch(e) {}
+        }
+
+        async function pollStatus() {
+            for (let i = 0; i < 60; i++) {
+                await new Promise(r => setTimeout(r, 3000));
+                try {
+                    const res = await fetch('/api/status');
+                    const data = await res.json();
+                    document.getElementById('statusText').textContent = data.running ? '🟢 运行中' : '⚪ 空闲';
+                    document.getElementById('runStatus').textContent = data.running ? '🟢 运行中' : '⚪ 空闲';
+                    document.getElementById('totalCount').textContent = data.account_count;
+                    const badge = document.getElementById('accountBadge');
+                    if (badge) badge.textContent = data.account_count;
+                    if (data.last_log) {
+                        document.getElementById('logBox').textContent = data.last_log;
+                        document.getElementById('logBox').scrollTop = document.getElementById('logBox').scrollHeight;
+                    }
+                    if (!data.running) {
+                        document.getElementById('startBtn').disabled = false;
+                        document.getElementById('startBtn').textContent = '🚀 启动注册';
+                        showToast('✅ 注册任务完成！共 ' + data.account_count + ' 个账号');
+                        break;
+                    }
+                } catch(e) {}
+            }
+        }
+
+        // ======== 注册流程实时状态 ========
+        const FLOW_STEPS = {{ flow_steps_json|safe }};
+        let flowPollTimer = null;
+
+        function renderFlowSteps(status) {
+            const container = document.getElementById('flowSteps');
+            const steps = status.steps || {};
+            const stepOrder = FLOW_STEPS.map(s => s.id);
+
+            // 找出当前活跃步骤
+            let foundRunning = false;
+            let allDone = true;
+            let hasError = false;
+            let errorMsg = status.error || '';
+
+            container.innerHTML = '';
+            stepOrder.forEach((stepId, i) => {
+                const def = FLOW_STEPS.find(s => s.id === stepId);
+                const stepStatus = steps[stepId] || {status: 'pending', message: ''};
+                const statusName = stepStatus.status; // pending / running / done / error
+                if (statusName !== 'done' && statusName !== 'error') allDone = false;
+                if (statusName === 'running') foundRunning = true;
+                if (statusName === 'error') {
+                    hasError = true;
+                    if (stepStatus.message) errorMsg = stepStatus.message;
+                }
+
+                const isActive = statusName === 'running';
+                const isDone = statusName === 'done';
+                const isError = statusName === 'error';
+                const isWaiting = !foundRunning && statusName === 'pending';
+
+                const stepDiv = document.createElement('div');
+                stepDiv.className = 'flow-step';
+                if (isActive) stepDiv.classList.add('active');
+                if (isDone) stepDiv.classList.add('done');
+                if (isError) stepDiv.classList.add('error');
+
+                stepDiv.innerHTML = `
+                    <div class="flow-step-icon ${isError ? 'error' : (isActive ? 'running' : (isDone ? 'done' : (isWaiting ? 'waiting' : 'pending')))}">
+                        <span class="emoji">${def.icon}</span>
+                        ${(isActive || isDone || isError) ? `<span class="flow-step-status-dot ${isError ? 'error' : (isDone ? 'done' : 'running')}"></span>` : ''}
+                    </div>
+                    <div class="flow-step-label">${def.label}</div>
+                `;
+
+                container.appendChild(stepDiv);
+
+                // 连接线（非最后一个）
+                if (i < stepOrder.length - 1) {
+                    const conn = document.createElement('div');
+                    conn.className = 'flow-connector' + (isDone ? ' done' : '') + (isActive ? ' active' : '');
+                    if (isDone) conn.classList.add('done');
+                    if (isActive) conn.classList.add('active');
+                    container.appendChild(conn);
+                }
+            });
+
+            // 更新头部状态
+            const statusText = document.getElementById('flowStatusText');
+            if (hasError) {
+                statusText.textContent = '❌ 步骤出错';
+                statusText.style.color = '#ef4444';
+            } else if (foundRunning) {
+                statusText.textContent = '🔄 运行中...';
+                statusText.style.color = '#60a5fa';
+            } else if (status.finished) {
+                statusText.textContent = '✅ 已完成';
+                statusText.style.color = '#22c55e';
+            } else if (status.started_at) {
+                statusText.textContent = '⏸️ 已停止';
+                statusText.style.color = '#f59e0b';
+            } else {
+                statusText.textContent = '⏳ 等待启动';
+                statusText.style.color = '#667788';
+            }
+
+            // 错误信息
+            const errorDiv = document.getElementById('flowError');
+            if (hasError && errorMsg) {
+                errorDiv.textContent = '❌ ' + errorMsg;
+                errorDiv.style.display = 'block';
+            } else {
+                errorDiv.style.display = 'none';
+            }
+        }
+
+        async function pollFlowStatus() {
+            try {
+                const res = await fetch('/api/flow-status');
+                const data = await res.json();
+                renderFlowSteps(data.status);
+            } catch(e) {}
+        }
+
+        // 初始渲染
+        // 在页面加载时自动调用；轮询在下方 DOMContentLoaded 中统一启动
+
+        // ======== 初始化 ========
+        document.addEventListener('DOMContentLoaded', function() {
+            // Restore last tab
+            const savedTab = localStorage.getItem('aws_tab');
+            if (savedTab && document.getElementById('panel-' + savedTab)) {
+                document.querySelectorAll('.tab').forEach((t, i) => {
+                    t.classList.toggle('active', i === Array.from(document.querySelectorAll('.tab')).findIndex(
+                        t2 => t2.textContent.includes(savedTab === 'accounts' ? '账号' : 
+                            savedTab === 'config' ? '配置' : 
+                            savedTab === 'envcheck' ? '环境' : 
+                            savedTab === 'control' ? '控制' : '移动')
+                    ));
+                });
+                document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+                document.getElementById('panel-' + savedTab).classList.add('active');
+            }
+            
+            // Render config form
+            renderConfigForm();
+            updateConfigBadge();
+            loadConfigStatus();
+
+            // Auto-refresh status
+            setInterval(refreshStatus, 10000);
+            
+            // 启动流程状态轮询
+            pollFlowStatus();
+            setInterval(pollFlowStatus, 3000);
+        });
+    </script>
+</body>
+</html>

@@ -17,6 +17,10 @@ from config import HEADLESS, SLOW_MO
 from services.email_service import create_temp_email, wait_for_verification_email
 from selenium.webdriver.common.action_chains import ActionChains
 from helpers.multilang import lang_selector
+from helpers.step_tracker import step_tracker
+
+# 标记开始
+step_tracker.start()
 
 
 fake = Faker('en_US')
@@ -193,6 +197,8 @@ def run(fixed_account=None):
             return  # 直接退出，不允许无代理运行
         print("=" * 50)
     
+    step_tracker.report("proxy_check", "done")
+    
     # 第一步：准备邮箱
     if fixed_account:
         # 使用 Outlook (fixed_account 包含完整的 credentials)
@@ -207,7 +213,10 @@ def run(fixed_account=None):
     
     if not email_address:
         print("创建邮箱失败，退出")
+        step_tracker.report("create_email", "error", "创建临时邮箱失败")
         return
+    
+    step_tracker.report("create_email", "done")
 
     # 配置 Chrome 选项 - 增强环境隔离
     options = uc.ChromeOptions()
@@ -215,6 +224,10 @@ def run(fixed_account=None):
     # 基本设置
     if HEADLESS:
         options.add_argument('--headless=new')
+    
+    # 指定 Chrome 浏览器路径和 ChromeDriver（WSL 环境）
+    options.binary_location = '/home/chanlaoban/.cache/ms-playwright/chromium-1208/chrome-linux64/chrome'
+    CHROMEDRIVER_PATH = '/home/chanlaoban/.local/bin/chromedriver'
     
     # 移动设备特殊设置
     if is_mobile():
@@ -284,10 +297,12 @@ def run(fixed_account=None):
     options.add_argument(f"--user-data-dir={user_data_dir}")
     
     print("\n正在启动浏览器...")
+    step_tracker.report("launch_browser", "running")
     try:
         # 传递 user_data_dir 给 uc.Chrome
-        driver = uc.Chrome(options=options, user_data_dir=user_data_dir)
+        driver = uc.Chrome(options=options, user_data_dir=user_data_dir, driver_executable_path=CHROMEDRIVER_PATH)
         wait = WebDriverWait(driver, 30)
+        step_tracker.report("launch_browser", "done")
         
         # === 注入硬件指纹混淆 (CPU核心数/内存) ===
         # 避免所有账号都显示完全相同的硬件配置
@@ -358,12 +373,15 @@ def run(fixed_account=None):
 
     try:
         # 第二步：打开 AWS Builder 页面
+        step_tracker.report("open_page", "running")
         print("\n正在打开 AWS Builder 页面...")
         driver.get("https://builder.aws.com/start")
         human_delay(2, 3)
         print(f"页面标题: {driver.title}")
+        step_tracker.report("open_page", "done")
 
         # 处理Cookie弹窗（必须先关闭，否则会遮挡元素）
+        step_tracker.report("cookie", "running")
         print("检查Cookie弹窗...")
         human_delay(3, 4)  # 给足够时间让弹窗完全加载
         
@@ -415,10 +433,13 @@ def run(fixed_account=None):
         
         if cookie_closed:
             print("   Cookie弹窗处理完成")
+            step_tracker.report("cookie", "done")
         else:
             print("   ⚠️  未能自动关闭Cookie弹窗，继续尝试...")
+            step_tracker.report("cookie", "done")
         
         # 点击 Sign up with Builder ID
+        step_tracker.report("click_signup", "running")
         print("正在点击 Sign up with Builder ID...")
         human_delay(4, 6)  # 增加等待时间，确保页面完全加载
         
@@ -553,8 +574,10 @@ def run(fixed_account=None):
         # 截图
         driver.save_screenshot("screenshot.png")
         print("已截图当前页面")
+        step_tracker.report("click_signup", "done")
 
         # 第三步：填写邮箱（带重试）
+        step_tracker.report("fill_email", "running")
         print(f"正在填写邮箱: {email_address}")
         
         def safe_input(selector, value, max_retries=3):
@@ -578,6 +601,7 @@ def run(fixed_account=None):
         safe_input((By.CSS_SELECTOR, 'input[placeholder="username@example.com"]'), email_address)
         driver.save_screenshot("screenshot.png")
         print("已填写邮箱")
+        step_tracker.report("fill_email", "done")
 
         # 点击继续按钮
         human_delay(1, 2)
@@ -593,6 +617,7 @@ def run(fixed_account=None):
         driver.save_screenshot("screenshot.png")
 
         # 第四步：填写姓名（带重试）
+        step_tracker.report("fill_name", "running")
         random_name = fake.name()
         print(f"正在填写姓名: {random_name}")
         
@@ -640,6 +665,7 @@ def run(fixed_account=None):
 
         driver.save_screenshot("screenshot.png")
         print("已填写姓名")
+        step_tracker.report("fill_name", "done")
 
         # 点击继续 (多语言兼容) - 带错误检测和多次重试
         max_continue_attempts = 5  # 增加到5次重试
@@ -776,6 +802,7 @@ def run(fixed_account=None):
         print(f"当前页面标题: {driver.title}")
 
         # 第五步：等待并获取验证码 (优先获取，因为可能页面还没加载完验证码就发过来了)
+        step_tracker.report("wait_code", "running")
         print("正在等待验证码邮件...")
         human_delay(3, 5) # 给页面一点加载时间
         
@@ -794,6 +821,8 @@ def run(fixed_account=None):
 
         if verification_code:
             print(f"获取到验证码: {verification_code}")
+            step_tracker.report("wait_code", "done")
+            step_tracker.report("fill_code", "running")
 
             # 填写验证码
             try:
@@ -850,13 +879,16 @@ def run(fixed_account=None):
                 # 点击后等待足够长的时间让页面跳转
                 print("等待页面跳转 (由于代理可能较慢)...")
                 human_delay(8, 12)
+                step_tracker.report("fill_code", "done")
 
             except Exception as e:
                     print(f"⚠️  填写验证码失败: {e}")
+                    step_tracker.report("fill_code", "error", str(e))
         else:
             print("❌ 未能获取到验证码")
 
         # 第六步：设置密码
+        step_tracker.report("set_password", "running")
         print("正在准备设置密码...")
         human_delay(5, 8)  # 等待验证通过后的跳转
         driver.save_screenshot("screenshot.png")
@@ -938,13 +970,18 @@ def run(fixed_account=None):
         print(f"最终页面标题: {driver.title}")
         print(f"最终页面 URL: {driver.current_url}")
         driver.save_screenshot("final_success.png")
+        step_tracker.report("set_password", "done")
 
         # 保存账号信息 (无论如何都尝试保存，因为可能已经成功)
+        step_tracker.report("save_account", "running")
         save_account(email_address, password, random_name, jwt_token)
         print("\n✅ 账号流程结束，已保存信息到 accounts.json")
+        step_tracker.report("save_account", "done")
+        step_tracker.finish()
 
     except Exception as e:
         print(f"过程发生错误: {e}")
+        step_tracker.error(str(e))
         try:
             driver.save_screenshot("error_screenshot.png")
             # 即使出错也保存账号，便于后续检查
